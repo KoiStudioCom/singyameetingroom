@@ -711,6 +711,15 @@
   var editingId = null;
   var viewerId = null;
   var onlyMine = false;
+  // 若要串接 LINE LIFF 做會員識別，在 LIFF 初始化並登入成功後，
+  // 把使用者的 LINE userId 存進這個變數即可，例如：
+  //   liff.init({ liffId: "你的 LIFF ID" }).then(function () {
+  //     if (liff.isLoggedIn()) {
+  //       liff.getProfile().then(function (p) { LINE_USER_ID = p.userId; });
+  //     }
+  //   });
+  // 之後新增／編輯預約時會自動把這個值一併送到後端存成 lineUserId 欄位。
+  var LINE_USER_ID = null;
 
   // ---------------- elements ----------------
   var els = {
@@ -1181,7 +1190,8 @@
           meetingName: name,
           registrant: registrant,
           startTime: start.toISOString(),
-          endTime: end.toISOString()
+          endTime: end.toISOString(),
+          lineUserId: LINE_USER_ID || null
         });
       } else {
         await addBooking({
@@ -1190,7 +1200,8 @@
           registeredAt: new Date().toISOString(),
           creatorId: viewerId || null,
           startTime: start.toISOString(),
-          endTime: end.toISOString()
+          endTime: end.toISOString(),
+          lineUserId: LINE_USER_ID || null
         });
       }
       selectedDate = startOfDay(start);
