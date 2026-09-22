@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="以小時／半小時登記會議室使用時段，自動偵測時段衝突，並提供週曆與月曆總覽。">
+<title>會議室預約表</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #F6F3EC;
+    --surface: #FFFFFF;
+    --surface-2: #EDE8DB;
+    --surface-3: #E4DECB;
+    --border: #DBD4C2;
+    --text: #211E19;
+    --text-muted: #746C5C;
+    --accent: #2F6F62;
+    --accent-strong: #1C453B;
+    --accent-soft: #DCEAE5;
+    --accent-ink: #FFFFFF;
+    --danger: #AD3F35;
+    --danger-soft: #F6DEDB;
+    --danger-ink: #FFFFFF;
+    --shadow: rgba(33, 30, 25, 0.10);
+    --now-line: #C9502F;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17181A;
+      --surface: #201E1A;
+      --surface-2: #29261F;
+      --surface-3: #322E25;
+      --border: #3C372C;
+      --text: #ECE7DB;
+      --text-muted: #A79E8C;
+      --accent: #63B09C;
+      --accent-strong: #8ACDBA;
+      --accent-soft: #24382F;
+      --accent-ink: #0F1B17;
+      --danger: #E2857A;
+      --danger-soft: #3A2420;
+      --danger-ink: #2B1210;
+      --shadow: rgba(0, 0, 0, 0.35);
+      --now-line: #E2856A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181A;
+    --surface: #201E1A;
+    --surface-2: #29261F;
+    --surface-3: #322E25;
+    --border: #3C372C;
+    --text: #ECE7DB;
+    --text-muted: #A79E8C;
+    --accent: #63B09C;
+    --accent-strong: #8ACDBA;
+    --accent-soft: #24382F;
+    --accent-ink: #0F1B17;
+    --danger: #E2857A;
+    --danger-soft: #3A2420;
+    --danger-ink: #2B1210;
+    --shadow: rgba(0, 0, 0, 0.35);
+    --now-line: #E2856A;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    padding-inline: 16px;
+    padding-block: 20px 40px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  h1, h2, h3 { font-family: "Noto Serif TC", serif; margin: 0; text-wrap: balance; }
+
+  /* ---------- header ---------- */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 14px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar h1 { font-size: 1.28rem; font-weight: 700; letter-spacing: 0.01em; }
+  .clock { text-align: right; color: var(--text-muted); font-size: 0.68rem; flex: 0 0 auto; }
+  .clock .time { font-size: 1.02rem; color: var(--text); font-weight: 600; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 2px 10px var(--shadow);
+  }
+
+  /* ---------- calendar screen toolbar ---------- */
+  .cal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .cta-btn {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 13px 16px;
+    border-radius: 11px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: inherit;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+  }
+  .cta-btn:hover { background: var(--accent-strong); }
+  .cta-btn:active { transform: scale(0.98); }
+
+  .my-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 9px 10px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .my-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+  .my-toggle.active { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ---------- form screen ---------- */
+  .form-card { padding: 20px; }
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 0 14px;
+    margin: 0;
+  }
+  .back-btn:hover { color: var(--accent-strong); }
+  .form-card h2 { font-size: 1.1rem; margin-bottom: 4px; }
+  .form-card .hint { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+  }
+  .field .req { color: var(--danger); }
+  .field input {
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .field input[readonly] {
+    color: var(--text-muted);
+    cursor: default;
+  }
+  #startTime[readonly], #endTime[readonly] {
+    color: var(--text);
+    cursor: pointer;
+    background: var(--surface-2);
+  }
+  #startTime[readonly]:hover, #endTime[readonly]:hover { border-color: var(--accent); }
+  .field.error input {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+    animation: shake .32s;
+  }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; min-width: 0; }
+  @media (max-width: 360px) {
+    .field-row { flex-direction: column; }
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 9px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: background .15s, transform .1s;
+  }
+  .submit-btn:hover { background: var(--accent-strong); }
+  .submit-btn:active { transform: scale(0.98); }
+  .submit-btn:disabled { opacity: 0.55; cursor: default; }
+
+  .form-msg {
+    margin-top: 12px;
+    font-size: 0.82rem;
+    padding: 9px 11px;
+    border-radius: 8px;
+    display: none;
+  }
+  .form-msg.show { display: block; }
+  .form-msg.ok { background: var(--accent-soft); color: var(--accent-strong); }
+  .form-msg.err { background: var(--danger-soft); color: var(--danger); }
+
+  .conn-note {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    line-height: 1.5;
+  }
+
+  /* ---------- view panel ---------- */
+  .view-card { padding: 16px 14px 22px; min-height: 480px; }
+  .view-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 9px; }
+  .tabs button {
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.83rem;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .tabs button.active { background: var(--surface); color: var(--accent-strong); box-shadow: 0 1px 3px var(--shadow); }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav button {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.95rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav button:hover { background: var(--surface-3); }
+  .nav .range-label { font-weight: 700; font-size: 0.86rem; min-width: 92px; text-align: center; }
+  .nav .today-btn {
+    width: auto; padding: 0 10px; font-size: 0.72rem; font-weight: 600;
+  }
+
+  /* ---------- week view: day strip + single-day timeline ---------- */
+  .week-daystrip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 2px 2px 10px;
+    margin-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .week-day-pill {
+    flex: 1 1 0;
+    min-width: 38px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 3px 6px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    cursor: pointer;
+    font: inherit;
+    color: var(--text);
+  }
+  .week-day-pill .dow { font-size: 0.64rem; color: var(--text-muted); font-weight: 600; }
+  .week-day-pill .dnum { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 0.92rem; }
+  .week-day-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 1px; visibility: hidden; }
+  .week-day-pill .dot.has { visibility: visible; }
+  .week-day-pill.today { border-color: var(--accent); }
+  .week-day-pill.selected { background: var(--accent); border-color: var(--accent); }
+  .week-day-pill.selected .dow,
+  .week-day-pill.selected .dnum { color: var(--accent-ink); }
+  .week-day-pill.selected .dot { background: var(--accent-ink); }
+
+  .day-timeline-scroll { overflow-x: auto; }
+  .day-timeline-wrap { position: relative; min-width: 230px; }
+  .day-timeline {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    border-top: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .day-hourlabel {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.64rem;
+    color: var(--text-muted);
+    text-align: right;
+    padding: 3px 6px 0 0;
+    font-family: "JetBrains Mono", monospace;
+    background: var(--surface-2);
+  }
+  .day-hourcell {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  /* overlay, NOT a grid child of .day-timeline: a grid item explicitly spanning
+     every row of column 2 would reserve that column before the hour cells get
+     auto-placed, pushing them into extra implicit rows. Positioning it as a
+     sibling overlay keeps the label/cell grid intact and simply draws events
+     on top, aligned to start after the 46px hour-label column. */
+  .day-events { position: absolute; top: 0; left: 46px; right: 0; bottom: 0; }
+
+  .event-block {
+    position: absolute;
+    left: 4px; right: 4px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 7px;
+    padding: 5px 8px;
+    font-size: 0.76rem;
+    line-height: 1.35;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+  .event-block .ttl { font-weight: 700; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .event-block .who { opacity: 0.88; font-size: 0.7rem; }
+  .event-block .rng { opacity: 0.82; font-size: 0.66rem; }
+  .event-block.mine { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+  .now-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: var(--now-line);
+    z-index: 3;
+  }
+  .now-line::before {
+    content: ""; position: absolute; left: -4px; top: -3px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--now-line);
+  }
+  .day-empty { text-align: center; color: var(--text-muted); font-size: 0.82rem; padding: 24px 0; }
+
+  /* ---------- month view ---------- */
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .month-dow {
+    padding: 6px 0;
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .month-cell {
+    min-height: 66px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 4px 3px 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .month-cell:hover { background: var(--surface-2); }
+  .month-cell.outside { background: var(--surface-2); opacity: 0.5; }
+  .month-cell.today { background: var(--accent-soft); }
+  .month-cell .dnum {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 700;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .month-cell.today .dnum { color: var(--accent-strong); }
+  .month-chip {
+    font-size: 0.58rem;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border-radius: 4px;
+    padding: 1px 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .month-chip.mine { background: var(--accent); color: var(--accent-ink); }
+  .month-more { font-size: 0.58rem; color: var(--text-muted); }
+
+  /* ---------- modal ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20, 18, 14, 0.45);
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    max-width: 400px;
+    width: 100%;
+    padding: 20px;
+    box-shadow: 0 12px 32px var(--shadow);
+  }
+  .modal .icon {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--danger-soft); color: var(--danger);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.15rem; font-weight: 800; margin-bottom: 12px;
+  }
+  .modal h3 { font-size: 1.02rem; margin-bottom: 6px; }
+  .modal p { font-size: 0.84rem; color: var(--text-muted); line-height: 1.6; margin: 0 0 14px; }
+  .modal .conflict-item {
+    background: var(--surface-2);
+    border-radius: 9px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+  }
+  .modal .conflict-item .ttl { font-weight: 700; margin-bottom: 2px; }
+  .modal .conflict-item .meta { color: var(--text-muted); font-size: 0.74rem; }
+  .modal button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 0.86rem;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .detail-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .detail-actions button { margin-top: 0; }
+  .detail-modal .edit-btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  .detail-modal .cancel-btn { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  .detail-modal .close-btn { background: var(--surface-2); color: var(--text); margin-top: 8px; }
+
+  /* ---------- custom time picker (date grid + hour grid) ---------- */
+  .tp-modal { max-width: 340px; padding: 18px 16px; text-align: left; }
+  .tp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .tp-head h3 { font-size: 1rem; }
+  .tp-close {
+    background: none; border: none; font-size: 1.05rem; line-height: 1;
+    color: var(--text-muted); cursor: pointer; padding: 4px;
+  }
+  .tp-close:hover { color: var(--text); }
+  .tp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .tp-nav button {
+    width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 0.95rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tp-nav-label { font-weight: 700; font-size: 0.88rem; }
+  .tp-weekdays {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    text-align: center; font-size: 0.66rem; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .tp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 16px; }
+  .tp-day {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border-radius: 9px; font-size: 0.82rem; cursor: pointer; color: var(--text);
+    background: transparent; border: 1px solid transparent; font-family: "JetBrains Mono", monospace;
+  }
+  .tp-day:hover { background: var(--surface-2); }
+  .tp-day.outside { color: var(--text-muted); opacity: .4; }
+  .tp-day.today { border-color: var(--accent); }
+  .tp-day.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .tp-hourlabel { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+  .tp-hours {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 18px;
+    max-height: 208px; overflow-y: auto; padding-right: 2px;
+  }
+  .tp-hour {
+    padding: 9px 0; text-align: center; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--surface-2); font-family: "JetBrains Mono", monospace; font-size: 0.78rem;
+    font-weight: 700; cursor: pointer; color: var(--text);
+  }
+  .tp-hour:hover { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-strong); }
+  .tp-hour.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .tp-confirm {
+    width: 100%; padding: 11px; border-radius: 9px; border: none;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.9rem; cursor: pointer;
+  }
+  .tp-confirm:hover { background: var(--accent-strong); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>會議室預約表</h1>
+  <div class="clock">
+    <div>今天</div>
+    <div class="time mono" id="clockTime">--:--:--</div>
+  </div>
+</div>
+
+<!-- ============ calendar screen ============ -->
+<div id="calendarScreen">
+  <div class="cal-toolbar">
+    <button type="button" class="cta-btn" id="openFormBtn">＋ 我要登記會議</button>
+    <label class="my-toggle" id="myToggleWrap" hidden>
+      <input type="checkbox" id="myToggle" />只看我登記的
+    </label>
+  </div>
+
+  <div class="card view-card">
+    <div class="view-head">
+      <div class="tabs">
+        <button type="button" id="tabWeek" class="active">週曆</button>
+        <button type="button" id="tabMonth">月曆</button>
+      </div>
+      <div class="nav">
+        <button type="button" id="navPrev" aria-label="上一個">‹</button>
+        <div class="range-label mono" id="rangeLabel">—</div>
+        <button type="button" id="navNext" aria-label="下一個">›</button>
+      </div>
+    </div>
+    <button type="button" id="navToday" class="today-btn nav-today-standalone" style="margin-bottom:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.72rem;font-weight:600;cursor:pointer;">回到今天</button>
+
+    <div id="weekView"></div>
+    <div id="monthView" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ============ booking form screen ============ -->
+<div id="formScreen" class="card form-card" hidden>
+  <button type="button" class="back-btn" id="backBtn">‹ 返回週曆／月曆</button>
+  <h2 id="formHeading">新增預約</h2>
+  <div class="hint">請選擇整點或半點時段（例：09:00、09:30）</div>
+
+  <form id="bookingForm" novalidate>
+    <div class="field" id="field-name">
+      <label>會議名稱 <span class="req">*</span></label>
+      <input type="text" id="meetingName" placeholder="例：第三季業務檢討會議" autocomplete="off" required />
+    </div>
+
+    <div class="field" id="field-registrant">
+      <label>登記人 <span class="req">*</span></label>
+      <input type="text" id="registrant" placeholder="請輸入姓名" autocomplete="off" required />
+    </div>
+
+    <div class="field">
+      <label id="registeredAtLabel">登記時間（自動帶入）</label>
+      <input type="text" id="registeredAtDisplay" class="mono" readonly tabindex="-1" />
+    </div>
+
+    <div class="field-row">
+      <div class="field" id="field-start">
+        <label>會議開始時間 <span class="req">*</span></label>
+        <input type="text" id="startTime" placeholder="點選選擇時間" readonly required />
+      </div>
+      <div class="field" id="field-end">
+        <label>會議結束時間 <span class="req">*</span></label>
+        <input type="text" id="endTime" placeholder="點選選擇時間" readonly required />
+      </div>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">確認登記</button>
+    <div class="form-msg" id="formMsg"></div>
+  </form>
+
+  <div class="conn-note" id="connNote">連線至共用預約資料中…</div>
+</div>
+
+<!-- conflict modal -->
+<div class="overlay" id="conflictOverlay">
+  <div class="modal">
+    <div class="icon">!</div>
+    <h3>此時段已被登記</h3>
+    <p>你選擇的時段與下列已登記的會議重疊，請選擇其他時段。</p>
+    <div id="conflictList"></div>
+    <button type="button" id="conflictOk">我知道了</button>
+  </div>
+</div>
+
+<!-- detail modal -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal detail-modal">
+    <h3 id="detailTitle">會議詳情</h3>
+    <div id="detailBody"></div>
+    <div class="detail-actions">
+      <button type="button" class="edit-btn" id="detailEdit">編輯</button>
+      <button type="button" class="cancel-btn" id="detailCancel">取消此預約</button>
+    </div>
+    <button type="button" class="close-btn" id="detailClose">關閉</button>
+  </div>
+</div>
+
+<!-- custom time picker (date grid + hour grid) -->
+<div class="overlay" id="timePickerOverlay">
+  <div class="modal tp-modal">
+    <div class="tp-head">
+      <h3 id="tpTitle">選擇時間</h3>
+      <button type="button" class="tp-close" id="tpClose" aria-label="關閉">✕</button>
+    </div>
+    <div class="tp-nav">
+      <button type="button" id="tpPrevMonth" aria-label="上個月">‹</button>
+      <div class="tp-nav-label mono" id="tpMonthLabel">—</div>
+      <button type="button" id="tpNextMonth" aria-label="下個月">›</button>
+    </div>
+    <div class="tp-weekdays" id="tpWeekdays"></div>
+    <div class="tp-days" id="tpDays"></div>
+    <div class="tp-hourlabel">選擇時段（整點／半點）</div>
+    <div class="tp-hours" id="tpHours"></div>
+    <button type="button" class="tp-confirm" id="tpConfirm">確認</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------------- utilities ----------------
+  var WEEKDOW = ["日", "一", "二", "三", "四", "五", "六"];
+  var HOUR_START = 8, HOUR_END = 20; // display + bookable window 08:00-20:00
+  var ROW_H = 42; // px per hour
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function fmtDateTimeLocalInput(d) {
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":00";
+  }
+  function fmtClock(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()); }
+  function fmtDateCN(d) { return d.getFullYear() + "/" + pad(d.getMonth() + 1) + "/" + pad(d.getDate()) + "（" + WEEKDOW[d.getDay()] + "）"; }
+  function fmtHM(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function startOfDay(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function mondayOf(d) { var x = startOfDay(d); var wd = x.getDay(); var diff = wd === 0 ? -6 : 1 - wd; return addDays(x, diff); }
+  function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+  function overlaps(aStart, aEnd, bStart, bEnd) { return aStart < bEnd && bStart < aEnd; }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  // ---------------- state ----------------
+  var bookings = []; // {id, meetingName, registrant, registeredAt, startTime(Date), endTime(Date), creatorId}
+  var view = "week";
+  var screen = "calendar"; // "calendar" | "form"
+  var selectedDate = startOfDay(new Date());
+  var monthAnchor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  var db = null;
+  var localMode = false;
+  var LOCAL_KEY = "meetingRoomBookings_v1";
+  // 若要改用 Google Sheet 當共用後端，把部署好的 Apps Script 網頁應用程式網址貼在這裡
+  // （結尾通常是 /exec），例如："https://script.google.com/macros/s/xxxxxxxx/exec"
+  // 詳見 apps-script.gs 檔案內的部署說明。留空則維持原本的行為。
+  var SHEET_API_URL = "https://script.google.com/macros/s/AKfycbwBv5aabGh55oziJBYZaagaaWrxMrtSPHmkLQiNXOAcZtyaigEVnEffbPw5gmjPuij6pQ/exec";
+  var sheetMode = false;
+  var sheetPollTimer = null;
+  var SHEET_POLL_MS = 5000;
+  var pendingDeleteId = null;
+  var editingId = null;
+  var viewerId = null;
+  var onlyMine = false;
+
+  // ---------------- elements ----------------
+  var els = {
+    clock: document.getElementById("clockTime"),
+    calendarScreen: document.getElementById("calendarScreen"),
+    formScreen: document.getElementById("formScreen"),
+    openFormBtn: document.getElementById("openFormBtn"),
+    backBtn: document.getElementById("backBtn"),
+    formHeading: document.getElementById("formHeading"),
+    form: document.getElementById("bookingForm"),
+    meetingName: document.getElementById("meetingName"),
+    registrant: document.getElementById("registrant"),
+    registeredAtLabel: document.getElementById("registeredAtLabel"),
+    registeredAtDisplay: document.getElementById("registeredAtDisplay"),
+    startTime: document.getElementById("startTime"),
+    endTime: document.getElementById("endTime"),
+    submitBtn: document.getElementById("submitBtn"),
+    formMsg: document.getElementById("formMsg"),
+    connNote: document.getElementById("connNote"),
+    tabWeek: document.getElementById("tabWeek"),
+    tabMonth: document.getElementById("tabMonth"),
+    navPrev: document.getElementById("navPrev"),
+    navNext: document.getElementById("navNext"),
+    navToday: document.getElementById("navToday"),
+    rangeLabel: document.getElementById("rangeLabel"),
+    weekView: document.getElementById("weekView"),
+    monthView: document.getElementById("monthView"),
+    myToggleWrap: document.getElementById("myToggleWrap"),
+    myToggle: document.getElementById("myToggle"),
+    conflictOverlay: document.getElementById("conflictOverlay"),
+    conflictList: document.getElementById("conflictList"),
+    conflictOk: document.getElementById("conflictOk"),
+    detailOverlay: document.getElementById("detailOverlay"),
+    detailTitle: document.getElementById("detailTitle"),
+    detailBody: document.getElementById("detailBody"),
+    detailEdit: document.getElementById("detailEdit"),
+    detailCancel: document.getElementById("detailCancel"),
+    detailClose: document.getElementById("detailClose"),
+    tpOverlay: document.getElementById("timePickerOverlay"),
+    tpTitle: document.getElementById("tpTitle"),
+    tpClose: document.getElementById("tpClose"),
+    tpPrevMonth: document.getElementById("tpPrevMonth"),
+    tpNextMonth: document.getElementById("tpNextMonth"),
+    tpMonthLabel: document.getElementById("tpMonthLabel"),
+    tpWeekdays: document.getElementById("tpWeekdays"),
+    tpDays: document.getElementById("tpDays"),
+    tpHours: document.getElementById("tpHours"),
+    tpConfirm: document.getElementById("tpConfirm")
+  };
+
+  // ---------------- clock + registeredAt live preview ----------------
+  function tickClock() {
+    var now = new Date();
+    els.clock.textContent = fmtClock(now);
+    if (!editingId) {
+      els.registeredAtDisplay.value = fmtDateCN(now) + "  " + fmtHM(now);
+    }
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  function nextHour(offsetHours) {
+    var d = new Date();
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + offsetHours);
+    return d;
+  }
+
+  // ---------------- time picker (custom date grid + hour grid) ----------------
+  var formStartDate = null, formEndDate = null; // the two Date values the form currently holds
+  var tpTarget = null; // "start" | "end"
+  var tpViewMonth = null; // first-of-month Date currently shown in the picker
+  var tpSelectedDay = null; // Date (start of day) currently highlighted
+  var tpSelectedHour = null; // number 0-23 currently highlighted
+  var tpSelectedMinute = 0; // 0 or 30
+
+  function fmtFieldDisplay(d) {
+    return fmtDateCN(d) + "  " + fmtHM(d);
+  }
+
+  // half-hour slots from HOUR_START:00 up to and including HOUR_END:00
+  function buildSlots() {
+    var slots = [];
+    for (var h = HOUR_START; h < HOUR_END; h++) {
+      slots.push({ h: h, m: 0 });
+      slots.push({ h: h, m: 30 });
+    }
+    slots.push({ h: HOUR_END, m: 0 });
+    return slots;
+  }
+
+  function renderTpWeekdays() {
+    els.tpWeekdays.innerHTML = ["一", "二", "三", "四", "五", "六", "日"].map(function (w) { return "<div>週" + w + "</div>"; }).join("");
+  }
+
+  function renderTpDays() {
+    var y = tpViewMonth.getFullYear(), m = tpViewMonth.getMonth();
+    els.tpMonthLabel.textContent = y + "年" + (m + 1) + "月";
+    var gridStart = mondayOf(new Date(y, m, 1));
+    var today = startOfDay(new Date());
+    var html = "";
+    for (var i = 0; i < 42; i++) {
+      var d = addDays(gridStart, i);
+      var outside = d.getMonth() !== m;
+      var isToday = sameDay(d, today);
+      var isSelected = tpSelectedDay && sameDay(d, tpSelectedDay);
+      html += '<div class="tp-day' + (outside ? ' outside' : '') + (isToday ? ' today' : '') + (isSelected ? ' selected' : '') +
+        '" data-date="' + startOfDay(d).getTime() + '">' + d.getDate() + '</div>';
+    }
+    els.tpDays.innerHTML = html;
+    els.tpDays.querySelectorAll(".tp-day").forEach(function (el) {
+      el.addEventListener("click", function () {
+        tpSelectedDay = new Date(parseInt(el.getAttribute("data-date"), 10));
+        var viewedMonth = tpSelectedDay.getMonth();
+        if (viewedMonth !== tpViewMonth.getMonth() || tpSelectedDay.getFullYear() !== tpViewMonth.getFullYear()) {
+          tpViewMonth = new Date(tpSelectedDay.getFullYear(), tpSelectedDay.getMonth(), 1);
+        }
+        renderTpDays();
+      });
+    });
+  }
+
+  function renderTpHours() {
+    var html = buildSlots().map(function (slot) {
+      var isSelected = tpSelectedHour === slot.h && tpSelectedMinute === slot.m;
+      return '<div class="tp-hour' + (isSelected ? ' selected' : '') + '" data-hour="' + slot.h + '" data-minute="' + slot.m + '">' +
+        pad(slot.h) + ':' + pad(slot.m) + '</div>';
+    }).join("");
+    els.tpHours.innerHTML = html;
+    els.tpHours.querySelectorAll(".tp-hour").forEach(function (el) {
+      el.addEventListener("click", function () {
+        tpSelectedHour = parseInt(el.getAttribute("data-hour"), 10);
+        tpSelectedMinute = parseInt(el.getAttribute("data-minute"), 10);
+        renderTpHours();
+      });
+    });
+  }
+
+  function openTimePicker(target) {
+    tpTarget = target;
+    var current = target === "start" ? formStartDate : formEndDate;
+    if (!current) current = target === "start" ? nextHour(1) : nextHour(2);
+    if (current.getHours() < HOUR_START) current = new Date(current.getFullYear(), current.getMonth(), current.getDate(), HOUR_START);
+    if (current.getHours() > HOUR_END || (current.getHours() === HOUR_END && current.getMinutes() > 0)) {
+      current = new Date(current.getFullYear(), current.getMonth(), current.getDate(), HOUR_END);
+    }
+    tpSelectedDay = startOfDay(current);
+    tpSelectedHour = current.getHours();
+    tpSelectedMinute = current.getMinutes() < 30 ? 0 : 30;
+    tpViewMonth = new Date(current.getFullYear(), current.getMonth(), 1);
+    els.tpTitle.textContent = target === "start" ? "選擇會議開始時間" : "選擇會議結束時間";
+    renderTpWeekdays();
+    renderTpDays();
+    renderTpHours();
+    els.tpOverlay.classList.add("show");
+  }
+
+  function closeTimePicker() { els.tpOverlay.classList.remove("show"); tpTarget = null; }
+
+  els.tpClose.addEventListener("click", closeTimePicker);
+  els.tpOverlay.addEventListener("click", function (e) { if (e.target === els.tpOverlay) closeTimePicker(); });
+  els.tpPrevMonth.addEventListener("click", function () {
+    tpViewMonth = new Date(tpViewMonth.getFullYear(), tpViewMonth.getMonth() - 1, 1);
+    renderTpDays();
+  });
+  els.tpNextMonth.addEventListener("click", function () {
+    tpViewMonth = new Date(tpViewMonth.getFullYear(), tpViewMonth.getMonth() + 1, 1);
+    renderTpDays();
+  });
+  els.tpConfirm.addEventListener("click", function () {
+    if (!tpTarget || !tpSelectedDay || tpSelectedHour === null) { closeTimePicker(); return; }
+    var picked = new Date(tpSelectedDay.getFullYear(), tpSelectedDay.getMonth(), tpSelectedDay.getDate(), tpSelectedHour, tpSelectedMinute, 0, 0);
+    if (tpTarget === "start") {
+      formStartDate = picked;
+      els.startTime.value = fmtFieldDisplay(picked);
+      if (!formEndDate || formEndDate <= formStartDate) {
+        formEndDate = new Date(picked.getTime() + 3600000);
+        els.endTime.value = fmtFieldDisplay(formEndDate);
+      }
+    } else {
+      formEndDate = picked;
+      els.endTime.value = fmtFieldDisplay(picked);
+    }
+    closeTimePicker();
+  });
+
+  els.startTime.addEventListener("click", function () { openTimePicker("start"); });
+  els.endTime.addEventListener("click", function () { openTimePicker("end"); });
+
+  // ---------------- screen / form mode switching ----------------
+  function showScreen(s) {
+    screen = s;
+    els.calendarScreen.hidden = s !== "calendar";
+    els.formScreen.hidden = s !== "form";
+    if (s === "calendar") renderAll();
+  }
+
+  function openNewForm() {
+    editingId = null;
+    els.formHeading.textContent = "新增預約";
+    els.registeredAtLabel.textContent = "登記時間（自動帶入）";
+    els.submitBtn.textContent = "確認登記";
+    els.meetingName.value = "";
+    els.registrant.value = viewerDefaultName || "";
+    formStartDate = nextHour(1);
+    formEndDate = nextHour(2);
+    els.startTime.value = fmtFieldDisplay(formStartDate);
+    els.endTime.value = fmtFieldDisplay(formEndDate);
+    els.formMsg.className = "form-msg";
+    clearFieldErrors();
+    tickClock();
+    showScreen("form");
+  }
+
+  function openEditForm(b) {
+    editingId = b.id;
+    els.formHeading.textContent = "編輯預約";
+    els.registeredAtLabel.textContent = "原登記時間（不可編輯）";
+    els.submitBtn.textContent = "儲存變更";
+    els.meetingName.value = b.meetingName;
+    els.registrant.value = b.registrant;
+    els.registeredAtDisplay.value = b.registeredAt ? (fmtDateCN(new Date(b.registeredAt)) + "  " + fmtHM(new Date(b.registeredAt))) : "—";
+    formStartDate = new Date(b.startTime);
+    formEndDate = new Date(b.endTime);
+    els.startTime.value = fmtFieldDisplay(formStartDate);
+    els.endTime.value = fmtFieldDisplay(formEndDate);
+    els.formMsg.className = "form-msg";
+    clearFieldErrors();
+    showScreen("form");
+  }
+
+  els.openFormBtn.addEventListener("click", openNewForm);
+  els.backBtn.addEventListener("click", function () { showScreen("calendar"); });
+
+  // ---------------- data layer (db capability with localStorage fallback) ----------------
+  var viewerDefaultName = "";
+
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(LOCAL_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      bookings = arr.map(function (b) {
+        return Object.assign({}, b, { startTime: new Date(b.startTime), endTime: new Date(b.endTime) });
+      });
+    } catch (e) { bookings = []; }
+    renderAll();
+  }
+  function saveLocal() {
+    try {
+      var arr = bookings.map(function (b) {
+        return {
+          id: b.id, meetingName: b.meetingName, registrant: b.registrant,
+          registeredAt: b.registeredAt, creatorId: b.creatorId || null,
+          startTime: b.startTime.toISOString(), endTime: b.endTime.toISOString()
+        };
+      });
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+
+  function docToBooking(snap) {
+    var d = snap.data() || {};
+    return {
+      id: snap.id,
+      meetingName: d.meetingName || "",
+      registrant: d.registrant || "",
+      registeredAt: d.registeredAt || "",
+      creatorId: d.creatorId || null,
+      startTime: d.startTime ? new Date(d.startTime) : new Date(),
+      endTime: d.endTime ? new Date(d.endTime) : new Date()
+    };
+  }
+
+  function subscribeDb() {
+    db.collection("bookings").limit(500).onSnapshot(function (snap) {
+      bookings = snap.docs.map(docToBooking);
+      renderAll();
+    }, function (err) {
+      console.log("bookings subscribe error", err && err.code);
+      if (!localMode) { localMode = true; loadLocal(); }
+      els.connNote.textContent = "目前無法連線至共用預約資料，登記將暫存在此裝置。";
+    });
+  }
+
+  // ---------------- data layer (Google Sheet backend, via Apps Script Web App) ----------------
+  function sheetRowToBooking(b) {
+    return Object.assign({}, b, { startTime: new Date(b.startTime), endTime: new Date(b.endTime) });
+  }
+
+  async function refreshFromSheet(isFirst) {
+    try {
+      var res = await fetch(SHEET_API_URL, { method: "GET" });
+      var json = await res.json();
+      if (json.error) throw new Error(json.error);
+      bookings = (json.bookings || []).map(sheetRowToBooking);
+      renderAll();
+      els.connNote.textContent = "已連線至 Google Sheet 共用資料，所有登記會同步給所有檢視者（約每 " + Math.round(SHEET_POLL_MS / 1000) + " 秒更新一次）。";
+    } catch (e) {
+      console.log("sheet fetch error", e);
+      if (isFirst) {
+        localMode = true;
+        sheetMode = false;
+        els.connNote.textContent = "無法連線至 Google Sheet（請確認 SHEET_API_URL 網址是否正確、部署權限是否設為「所有人」），登記將暫存在此裝置。";
+        loadLocal();
+      }
+    }
+  }
+
+  async function postToSheet(payload) {
+    var res = await fetch(SHEET_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+    var json = await res.json();
+    if (json.error) throw new Error(json.error);
+    bookings = (json.bookings || []).map(sheetRowToBooking);
+    renderAll();
+  }
+
+  async function addBooking(data) {
+    if (sheetMode) {
+      await postToSheet({ action: "add", data: data });
+      return;
+    }
+    if (db && !localMode) {
+      await db.collection("bookings").add(data);
+    } else {
+      var b = Object.assign({ id: "local-" + Date.now() + "-" + Math.random().toString(36).slice(2) }, data, {
+        startTime: new Date(data.startTime), endTime: new Date(data.endTime)
+      });
+      bookings.push(b);
+      saveLocal();
+      renderAll();
+    }
+  }
+
+  async function updateBookingData(id, data) {
+    if (sheetMode) {
+      await postToSheet({ action: "update", id: id, data: data });
+      return;
+    }
+    if (db && !localMode) {
+      await db.collection("bookings").doc(id).update(data);
+    } else {
+      bookings = bookings.map(function (b) {
+        if (b.id !== id) return b;
+        return Object.assign({}, b, data, { startTime: new Date(data.startTime), endTime: new Date(data.endTime) });
+      });
+      saveLocal();
+      renderAll();
+    }
+  }
+
+  async function deleteBooking(id) {
+    if (sheetMode) {
+      await postToSheet({ action: "delete", id: id });
+      return;
+    }
+    if (db && !localMode) {
+      await db.collection("bookings").doc(id).delete();
+    } else {
+      bookings = bookings.filter(function (b) { return b.id !== id; });
+      saveLocal();
+      renderAll();
+    }
+  }
+
+  async function initData() {
+    if (SHEET_API_URL) {
+      sheetMode = true;
+      els.connNote.textContent = "連線至 Google Sheet 共用資料中…";
+      await refreshFromSheet(true);
+      if (sheetMode) {
+        if (sheetPollTimer) clearInterval(sheetPollTimer);
+        sheetPollTimer = setInterval(function () { refreshFromSheet(false); }, SHEET_POLL_MS);
+      }
+      return;
+    }
+    if (window.claude && typeof window.claude.use === "function") {
+      try { db = await window.claude.use("db"); } catch (e) { db = null; }
+    }
+    if (db) {
+      els.connNote.textContent = "已連線至共用預約資料，所有登記即時同步給所有檢視者。";
+      subscribeDb();
+    } else {
+      localMode = true;
+      els.connNote.textContent = "此檢視模式無法連線共用資料，登記將暫存在此裝置的瀏覽器中。";
+      loadLocal();
+    }
+  }
+
+  async function initViewer() {
+    if (window.claude && typeof window.claude.use === "function") {
+      try {
+        var user = await window.claude.use("user");
+        if (user) {
+          viewerId = await user.id();
+        }
+      } catch (e) { viewerId = null; }
+    }
+    if (viewerId) {
+      els.myToggleWrap.hidden = false;
+    }
+  }
+
+  // ---------------- conflict check ----------------
+  function findConflicts(start, end, excludeId) {
+    return bookings.filter(function (b) {
+      if (excludeId && b.id === excludeId) return false;
+      return overlaps(start, end, b.startTime, b.endTime);
+    });
+  }
+
+  // ---------------- form submit ----------------
+  function clearFieldErrors() {
+    ["field-name", "field-registrant", "field-start", "field-end"].forEach(function (id) {
+      document.getElementById(id).classList.remove("error");
+    });
+  }
+  function markError(id) { document.getElementById(id).classList.add("error"); }
+  function showFormMsg(text, kind) {
+    els.formMsg.textContent = text;
+    els.formMsg.className = "form-msg show " + kind;
+  }
+
+  els.form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    clearFieldErrors();
+    els.formMsg.className = "form-msg";
+
+    var name = els.meetingName.value.trim();
+    var registrant = els.registrant.value.trim();
+    var start = formStartDate ? new Date(formStartDate) : null;
+    var end = formEndDate ? new Date(formEndDate) : null;
+
+    var ok = true;
+    if (!name) { markError("field-name"); ok = false; }
+    if (!registrant) { markError("field-registrant"); ok = false; }
+    if (!start) { markError("field-start"); ok = false; }
+    if (!end) { markError("field-end"); ok = false; }
+    if (!ok) { showFormMsg("請完整填寫必填欄位。", "err"); return; }
+
+    // defensive: snap to the nearest half hour (picker only ever offers :00/:30)
+    start.setMinutes(start.getMinutes() < 15 ? 0 : (start.getMinutes() < 45 ? 30 : 60), 0, 0);
+    end.setMinutes(end.getMinutes() < 15 ? 0 : (end.getMinutes() < 45 ? 30 : 60), 0, 0);
+
+    if (end <= start) {
+      markError("field-end");
+      showFormMsg("結束時間必須晚於開始時間。", "err");
+      return;
+    }
+
+    var conflicts = findConflicts(start, end, editingId);
+    if (conflicts.length > 0) {
+      markError("field-start");
+      markError("field-end");
+      openConflictModal(conflicts);
+      return;
+    }
+
+    els.submitBtn.disabled = true;
+    els.submitBtn.textContent = editingId ? "儲存中…" : "登記中…";
+
+    try {
+      if (editingId) {
+        await updateBookingData(editingId, {
+          meetingName: name,
+          registrant: registrant,
+          startTime: start.toISOString(),
+          endTime: end.toISOString()
+        });
+      } else {
+        await addBooking({
+          meetingName: name,
+          registrant: registrant,
+          registeredAt: new Date().toISOString(),
+          creatorId: viewerId || null,
+          startTime: start.toISOString(),
+          endTime: end.toISOString()
+        });
+      }
+      selectedDate = startOfDay(start);
+      monthAnchor = new Date(start.getFullYear(), start.getMonth(), 1);
+      editingId = null;
+      showScreen("calendar");
+    } catch (err) {
+      showFormMsg(editingId ? "儲存失敗，請稍後再試。" : "登記失敗，請稍後再試。", "err");
+      els.submitBtn.disabled = false;
+      els.submitBtn.textContent = editingId ? "儲存變更" : "確認登記";
+    }
+  });
+
+  // ---------------- conflict modal ----------------
+  function openConflictModal(conflicts) {
+    els.conflictList.innerHTML = conflicts.map(function (b) {
+      return '<div class="conflict-item">' +
+        '<div class="ttl">' + escapeHtml(b.meetingName) + '</div>' +
+        '<div class="meta">登記人：' + escapeHtml(b.registrant) + ' ・ ' + fmtDateCN(b.startTime) + ' ' + fmtHM(b.startTime) + '–' + fmtHM(b.endTime) + '</div>' +
+        '</div>';
+    }).join("");
+    els.conflictOverlay.classList.add("show");
+  }
+  els.conflictOk.addEventListener("click", function () { els.conflictOverlay.classList.remove("show"); });
+  els.conflictOverlay.addEventListener("click", function (e) { if (e.target === els.conflictOverlay) els.conflictOverlay.classList.remove("show"); });
+
+  // ---------------- detail modal ----------------
+  var detailBooking = null;
+  function openDetailModal(b) {
+    detailBooking = b;
+    pendingDeleteId = b.id;
+    els.detailTitle.textContent = b.meetingName;
+    els.detailBody.innerHTML =
+      '<div class="conflict-item">' +
+      '<div class="meta">登記人：' + escapeHtml(b.registrant) + '</div>' +
+      '<div class="meta">時段：' + fmtDateCN(b.startTime) + ' ' + fmtHM(b.startTime) + '–' + fmtHM(b.endTime) + '</div>' +
+      '<div class="meta">登記時間：' + (b.registeredAt ? fmtDateCN(new Date(b.registeredAt)) + " " + fmtHM(new Date(b.registeredAt)) : "—") + '</div>' +
+      '</div>';
+    els.detailOverlay.classList.add("show");
+  }
+  els.detailClose.addEventListener("click", function () { els.detailOverlay.classList.remove("show"); pendingDeleteId = null; detailBooking = null; });
+  els.detailOverlay.addEventListener("click", function (e) { if (e.target === els.detailOverlay) { els.detailOverlay.classList.remove("show"); pendingDeleteId = null; detailBooking = null; } });
+  els.detailEdit.addEventListener("click", function () {
+    if (!detailBooking) return;
+    var b = detailBooking;
+    els.detailOverlay.classList.remove("show");
+    detailBooking = null;
+    openEditForm(b);
+  });
+  els.detailCancel.addEventListener("click", async function () {
+    if (!pendingDeleteId) return;
+    els.detailCancel.disabled = true;
+    els.detailCancel.textContent = "取消中…";
+    try {
+      await deleteBooking(pendingDeleteId);
+    } finally {
+      els.detailCancel.disabled = false;
+      els.detailCancel.textContent = "取消此預約";
+      els.detailOverlay.classList.remove("show");
+      pendingDeleteId = null;
+      detailBooking = null;
+    }
+  });
+
+  // ---------------- my-bookings filter ----------------
+  els.myToggle.addEventListener("change", function () {
+    onlyMine = els.myToggle.checked;
+    els.myToggleWrap.classList.toggle("active", onlyMine);
+    renderAll();
+  });
+
+  function visibleBookings() {
+    if (!onlyMine || !viewerId) return bookings;
+    return bookings.filter(function (b) { return b.creatorId === viewerId; });
+  }
+
+  // ---------------- tabs / nav ----------------
+  els.tabWeek.addEventListener("click", function () { setView("week"); });
+  els.tabMonth.addEventListener("click", function () { setView("month"); });
+  function setView(v) {
+    view = v;
+    els.tabWeek.classList.toggle("active", v === "week");
+    els.tabMonth.classList.toggle("active", v === "month");
+    els.weekView.style.display = v === "week" ? "" : "none";
+    els.monthView.style.display = v === "month" ? "" : "none";
+    renderAll();
+  }
+  els.navPrev.addEventListener("click", function () {
+    if (view === "week") selectedDate = addDays(selectedDate, -7);
+    else monthAnchor = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() - 1, 1);
+    renderAll();
+  });
+  els.navNext.addEventListener("click", function () {
+    if (view === "week") selectedDate = addDays(selectedDate, 7);
+    else monthAnchor = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 1);
+    renderAll();
+  });
+  els.navToday.addEventListener("click", function () {
+    selectedDate = startOfDay(new Date());
+    monthAnchor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    renderAll();
+  });
+
+  // ---------------- render: week (day strip + single-day timeline) ----------------
+  function renderWeek() {
+    var list = visibleBookings();
+    var monday = mondayOf(selectedDate);
+    var days = [];
+    for (var i = 0; i < 7; i++) days.push(addDays(monday, i));
+    var today = startOfDay(new Date());
+    var sunday = days[6];
+
+    els.rangeLabel.textContent = (monday.getMonth() + 1) + "/" + monday.getDate() + " – " + (sunday.getMonth() + 1) + "/" + sunday.getDate();
+
+    // day strip
+    var stripHtml = '<div class="week-daystrip">';
+    days.forEach(function (d) {
+      var isToday = sameDay(d, today);
+      var isSelected = sameDay(d, selectedDate);
+      var dayStart = startOfDay(d), dayEnd = addDays(dayStart, 1);
+      var hasBooking = list.some(function (b) { return b.startTime < dayEnd && b.endTime > dayStart; });
+      stripHtml += '<button type="button" class="week-day-pill' + (isToday ? ' today' : '') + (isSelected ? ' selected' : '') + '" data-date="' + dayStart.getTime() + '">' +
+        '<span class="dow">週' + WEEKDOW[d.getDay()] + '</span>' +
+        '<span class="dnum">' + d.getDate() + '</span>' +
+        '<span class="dot' + (hasBooking ? ' has' : '') + '"></span>' +
+        '</button>';
+    });
+    stripHtml += '</div>';
+
+    // single-day timeline
+    var dayStart = startOfDay(selectedDate);
+    var dayEnd = addDays(dayStart, 1);
+    var dayBookings = list.filter(function (b) { return b.startTime < dayEnd && b.endTime > dayStart; })
+      .sort(function (a, b) { return a.startTime - b.startTime; });
+
+    var rows = HOUR_END - HOUR_START;
+    var timelineHtml = '<div class="day-timeline-scroll"><div class="day-timeline-wrap"><div class="day-timeline" style="grid-template-rows: repeat(' + rows + ', ' + ROW_H + 'px);">';
+    for (var h = HOUR_START; h < HOUR_END; h++) {
+      timelineHtml += '<div class="day-hourlabel">' + pad(h) + ':00</div>';
+      timelineHtml += '<div class="day-hourcell"></div>';
+    }
+    timelineHtml += '</div><div class="day-events"></div></div></div>';
+
+    els.weekView.innerHTML = stripHtml +
+      '<h3 class="day-heading" style="font-size:0.95rem;margin-bottom:8px;">' + fmtDateCN(selectedDate) + '</h3>' +
+      timelineHtml +
+      (dayBookings.length === 0 ? '<div class="day-empty">' + (onlyMine ? "這天你沒有登記的預約" : "這天目前沒有預約") + '</div>' : '');
+
+    // strip click handling
+    els.weekView.querySelectorAll(".week-day-pill").forEach(function (pill) {
+      pill.addEventListener("click", function () {
+        selectedDate = new Date(parseInt(pill.getAttribute("data-date"), 10));
+        renderWeek();
+      });
+    });
+
+    // place events
+    var eventsLayer = els.weekView.querySelector(".day-events");
+    dayBookings.forEach(function (b) {
+      var s = b.startTime < dayStart ? dayStart : b.startTime;
+      var eTime = b.endTime > dayEnd ? dayEnd : b.endTime;
+      var startHourFrac = Math.max(HOUR_START, s.getHours() + s.getMinutes() / 60);
+      var endHourFrac = Math.min(HOUR_END, eTime.getHours() + eTime.getMinutes() / 60 || HOUR_END);
+      if (endHourFrac <= HOUR_START || startHourFrac >= HOUR_END) return;
+      var top = (startHourFrac - HOUR_START) * ROW_H;
+      var height = Math.max(28, (endHourFrac - startHourFrac) * ROW_H - 3);
+      var block = document.createElement("div");
+      block.className = "event-block" + (viewerId && b.creatorId === viewerId ? " mine" : "");
+      block.style.top = top + "px";
+      block.style.height = height + "px";
+      block.innerHTML = '<span class="ttl">' + escapeHtml(b.meetingName) + '</span>' +
+        '<span class="rng">' + fmtHM(b.startTime) + '–' + fmtHM(b.endTime) + '</span> ' +
+        '<span class="who">・ ' + escapeHtml(b.registrant) + '</span>';
+      block.addEventListener("click", function () { openDetailModal(b); });
+      eventsLayer.appendChild(block);
+    });
+
+    // now line
+    if (sameDay(selectedDate, today)) {
+      var now = new Date();
+      var nowFrac = now.getHours() + now.getMinutes() / 60;
+      if (nowFrac >= HOUR_START && nowFrac <= HOUR_END) {
+        var line = document.createElement("div");
+        line.className = "now-line";
+        line.style.top = ((nowFrac - HOUR_START) * ROW_H) + "px";
+        eventsLayer.appendChild(line);
+      }
+    }
+  }
+
+  // ---------------- render: month ----------------
+  function renderMonth() {
+    var list = visibleBookings();
+    var y = monthAnchor.getFullYear(), m = monthAnchor.getMonth();
+    els.rangeLabel.textContent = y + "年" + (m + 1) + "月";
+
+    var firstOfMonth = new Date(y, m, 1);
+    var gridStart = mondayOf(firstOfMonth);
+    var today = new Date();
+
+    var html = '<div class="month-grid">';
+    ["一", "二", "三", "四", "五", "六", "日"].forEach(function (w) {
+      html += '<div class="month-dow">週' + w + '</div>';
+    });
+
+    for (var i = 0; i < 42; i++) {
+      var d = addDays(gridStart, i);
+      var outside = d.getMonth() !== m;
+      var isToday = sameDay(d, today);
+      var dayStart = startOfDay(d), dayEnd = addDays(dayStart, 1);
+      var dayBookings = list.filter(function (b) { return b.startTime < dayEnd && b.endTime > dayStart; })
+        .sort(function (a, b) { return a.startTime - b.startTime; });
+
+      html += '<div class="month-cell' + (outside ? ' outside' : '') + (isToday ? ' today' : '') + '" data-idx="' + i + '">';
+      html += '<div class="dnum">' + d.getDate() + '</div>';
+      dayBookings.slice(0, 2).forEach(function (b) {
+        var mine = viewerId && b.creatorId === viewerId;
+        html += '<div class="month-chip' + (mine ? ' mine' : '') + '" data-id="' + b.id + '">' + fmtHM(b.startTime) + ' ' + escapeHtml(b.meetingName) + '</div>';
+      });
+      if (dayBookings.length > 2) html += '<div class="month-more">+' + (dayBookings.length - 2) + ' 筆</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    els.monthView.innerHTML = html;
+
+    // click handling
+    els.monthView.querySelectorAll(".month-cell").forEach(function (cell, idx) {
+      cell.addEventListener("click", function (e) {
+        var chip = e.target.closest(".month-chip");
+        if (chip) {
+          var b = list.find(function (bb) { return bb.id === chip.getAttribute("data-id"); });
+          if (b) { openDetailModal(b); return; }
+        }
+        var d = addDays(gridStart, idx);
+        selectedDate = startOfDay(d);
+        setView("week");
+      });
+    });
+  }
+
+  function renderAll() {
+    if (screen !== "calendar") return;
+    if (view === "week") renderWeek(); else renderMonth();
+  }
+
+  // ---------------- boot ----------------
+  renderAll();
+  initData();
+  initViewer();
+})();
+</script>
+</body>
+</html>
