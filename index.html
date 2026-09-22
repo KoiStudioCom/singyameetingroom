@@ -546,6 +546,7 @@
   }
   .tp-confirm:hover { background: var(--accent-strong); }
 </style>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
 <div class="topbar">
@@ -711,14 +712,10 @@
   var editingId = null;
   var viewerId = null;
   var onlyMine = false;
-  // 若要串接 LINE LIFF 做會員識別，在 LIFF 初始化並登入成功後，
-  // 把使用者的 LINE userId 存進這個變數即可，例如：
-  //   liff.init({ liffId: "你的 LIFF ID" }).then(function () {
-  //     if (liff.isLoggedIn()) {
-  //       liff.getProfile().then(function (p) { LINE_USER_ID = p.userId; });
-  //     }
-  //   });
-  // 之後新增／編輯預約時會自動把這個值一併送到後端存成 lineUserId 欄位。
+  // LINE LIFF 會員識別：init 完成後，若尚未登入會導去 LINE 登入，
+  // 登入後取得的 LINE userId 存在 LINE_USER_ID，同時也當作 viewerId
+  // 使用，讓「只看我登記的」與「mine」外框標記可以運作。
+  var LIFF_ID = "2011692325-PVWSe70Z";
   var LINE_USER_ID = null;
 
   // ---------------- elements ----------------
@@ -1126,6 +1123,25 @@
     }
   }
 
+  // ---------------- LINE LIFF member identification ----------------
+  async function initLiff() {
+    if (typeof liff === "undefined") return;
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return; // page will reload after redirect back from LINE login
+      }
+      var profile = await liff.getProfile();
+      LINE_USER_ID = profile.userId;
+      viewerId = profile.userId;
+      els.myToggleWrap.hidden = false;
+      viewerDefaultName = profile.displayName || viewerDefaultName;
+    } catch (err) {
+      console.log("LIFF init failed", err);
+    }
+  }
+
   // ---------------- conflict check ----------------
   function findConflicts(start, end, excludeId) {
     return bookings.filter(function (b) {
@@ -1451,6 +1467,7 @@
   renderAll();
   initData();
   initViewer();
+  initLiff();
 })();
 </script>
 </body>
